@@ -16,11 +16,13 @@ func (cli *CLI) createTokoin(address, nodeID string) {
 	//tx := NewURPOTransaction(&wallet, to, &URPOSet)
 
 	cbTx := NewCoinbaseTX(address, "", 0, nil, 0, 37)
-	txs := []*Transaction{cbTx}//, tx}
-
-	newBlock := bc.MineBlock(txs)
-	bc.AddBlock(newBlock)
-	URPOSet.Update(newBlock)
+	go StartServer(nodeID, "")
+	sendTx(knownNodes[0], cbTx)
+	//txs := []*Transaction{cbTx}//, tx}
+	//
+	//newBlock := bc.MineBlock(txs)
+	//bc.AddBlock(newBlock)
+	//URPOSet.Update(newBlock)
 
 	fmt.Println("Success!")
 }

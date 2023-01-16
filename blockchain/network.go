@@ -1,10 +1,11 @@
-package main
+package blockchain
 
 import (
 	"bytes"
 	"encoding/gob"
 	"encoding/hex"
 	"fmt"
+	"github.com/zhuaiballl/Go-Tokoin/config"
 	"io"
 	"io/ioutil"
 	"log"
@@ -12,56 +13,48 @@ import (
 	"time"
 )
 
-const protocol = "tcp"
-const nodeVersion = 1
-const commandLength = 12
-
-var nodeAddress string
-var miningAddress string
 var knownNodes = []string{"localhost:3000"}
 var blocksInTransit = [][]byte{}
 var mempool = make(map[string]Transaction)
 
-type addr struct {
+type AddrPayload struct {
 	AddrList []string
 }
 
-type block struct {
+type BlockPayload struct {
 	AddrFrom string
 	Block    []byte
 }
 
-type getblocks struct {
+type GetblocksPayload struct {
 	AddrFrom string
 }
 
-type getdata struct {
+type GetdataPayload struct {
 	AddrFrom string
 	Type     string
 	ID       []byte
 }
 
-type inv struct {
+type InvPayload struct {
 	AddrFrom string
 	Type     string
 	Items    [][]byte
 }
 
-type tx struct {
+type TxPayload struct {
 	AddFrom     string
 	Transaction []byte
 }
 
-type verzion struct {
+type VersionPayload struct {
 	Version    int
 	BestHeight int
 	AddrFrom   string
 }
 
-
-
-func commandToBytes(command string) []byte {
-	var bytes [commandLength]byte
+func CommandToBytes(command string) []byte {
+	var bytes [config.CommandLength]byte
 
 	for i, c := range command {
 		bytes[i] = byte(c)
@@ -82,8 +75,12 @@ func bytesToCommand(bytes []byte) string {
 	return fmt.Sprintf("%s", command)
 }
 
+func DeleteMempoolTx(txID string) {
+	delete(mempool, txID)
+}
+
 func extractCommand(request []byte) []byte {
-	return request[:commandLength]
+	return request[:config.CommandLength]
 }
 
 func requestBlocks() {
@@ -93,24 +90,24 @@ func requestBlocks() {
 }
 
 func sendAddr(address string) {
-	nodes := addr{knownNodes}
-	nodes.AddrList = append(nodes.AddrList, nodeAddress)
-	payload := gobEncode(nodes)
-	request := append(commandToBytes("addr"), payload...)
+	nodes := AddrPayload{knownNodes}
+	nodes.AddrList = append(nodes.AddrList, config.NodeAddress)
+	payload := GobEncode(nodes)
+	request := append(CommandToBytes("addr"), payload...)
 
-	sendData(address, request)
+	SendData(address, request)
 }
 
 func sendBlock(addr string, b *Block) {
-	data := block{nodeAddress, b.Serialize()}
-	payload := gobEncode(data)
-	request := append(commandToBytes("block"), payload...)
+	data := BlockPayload{config.NodeAddress, b.Serialize()}
+	payload := GobEncode(data)
+	request := append(CommandToBytes("block"), payload...)
 
-	sendData(addr, request)
+	SendData(addr, request)
 }
 
-func sendData(addr string, data []byte) {
-	conn, err := net.Dial(protocol, addr)
+func SendData(addr string, data []byte) {
+	conn, err := net.Dial(config.Protocol, addr)
 	if err != nil {
 		fmt.Printf("%s is not available\n", addr)
 		var updatedNodes []string
@@ -134,49 +131,53 @@ func sendData(addr string, data []byte) {
 }
 
 func sendInv(address, kind string, items [][]byte) {
-	inventory := inv{nodeAddress, kind, items}
-	payload := gobEncode(inventory)
-	request := append(commandToBytes("inv"), payload...)
+	inventory := InvPayload{config.NodeAddress, kind, items}
+	payload := GobEncode(inventory)
+	request := append(CommandToBytes("inv"), payload...)
 
-	sendData(address, request)
+	SendData(address, request)
 }
 
 func sendGetBlocks(address string) {
-	payload := gobEncode(getblocks{nodeAddress})
-	request := append(commandToBytes("getblocks"), payload...)
+	payload := GobEncode(GetblocksPayload{config.NodeAddress})
+	request := append(CommandToBytes("getblocks"), payload...)
 
-	sendData(address, request)
+	SendData(address, request)
 }
 
 func sendGetData(address, kind string, id []byte) {
-	payload := gobEncode(getdata{nodeAddress, kind, id})
-	request := append(commandToBytes("getdata"), payload...)
+	payload := GobEncode(GetdataPayload{config.NodeAddress, kind, id})
+	request := append(CommandToBytes("getdata"), payload...)
 
-	sendData(address, request)
+	SendData(address, request)
 }
 
-func sendTx(addr string, tnx *Transaction) {
-	data := tx{nodeAddress, tnx.Serialize()}
-	payload := gobEncode(data)
-	request := append(commandToBytes("tx"), payload...)
+func SendTx(addr string, tnx *Transaction) {
+	data := TxPayload{config.NodeAddress, tnx.Serialize()}
+	payload := GobEncode(data)
+	request := append(CommandToBytes("tx"), payload...)
 
-	sendData(addr, request)
+	SendData(addr, request)
+}
+
+func HandinTx(tx *Transaction) {
+	SendTx(knownNodes[0], tx)
 }
 
 func sendVersion(addr string, bc *Blockchain) {
 	bestHeight := bc.GetBestHeight()
-	payload := gobEncode(verzion{nodeVersion, bestHeight, nodeAddress})
+	payload := GobEncode(VersionPayload{config.NodeVersion, bestHeight, config.NodeAddress})
 
-	request := append(commandToBytes("version"), payload...)
+	request := append(CommandToBytes("version"), payload...)
 
-	sendData(addr, request)
+	SendData(addr, request)
 }
 
 func handleAddr(request []byte) {
 	var buff bytes.Buffer
-	var payload addr
+	var payload AddrPayload
 
-	buff.Write(request[commandLength:])
+	buff.Write(request[config.CommandLength:])
 	dec := gob.NewDecoder(&buff)
 	err := dec.Decode(&payload)
 	if err != nil {
@@ -188,11 +189,11 @@ func handleAddr(request []byte) {
 	requestBlocks()
 }
 
-func handleBlock(request []byte, bc *Blockchain) {
+func handleBlock(request []byte, bchain *Blockchain) {
 	var buff bytes.Buffer
-	var payload block
+	var payload BlockPayload
 
-	buff.Write(request[commandLength:])
+	buff.Write(request[config.CommandLength:])
 	dec := gob.NewDecoder(&buff)
 	err := dec.Decode(&payload)
 	if err != nil {
@@ -203,7 +204,7 @@ func handleBlock(request []byte, bc *Blockchain) {
 	block := DeserializeBlock(blockData)
 
 	fmt.Println("Recevied a new block!")
-	bc.AddBlock(block)
+	bchain.AddBlock(block)
 
 	fmt.Printf("Added block %x\n", block.Hash)
 
@@ -213,16 +214,16 @@ func handleBlock(request []byte, bc *Blockchain) {
 
 		blocksInTransit = blocksInTransit[1:]
 	} else {
-		URPOSet := URPOSet{bc}
+		URPOSet := URPOSet{bchain}
 		URPOSet.Reindex()
 	}
 }
 
-func handleInv(request []byte, bc *Blockchain) {
+func handleInv(request []byte, bchain *Blockchain) {
 	var buff bytes.Buffer
-	var payload inv
+	var payload InvPayload
 
-	buff.Write(request[commandLength:])
+	buff.Write(request[config.CommandLength:])
 	dec := gob.NewDecoder(&buff)
 	err := dec.Decode(&payload)
 	if err != nil {
@@ -255,26 +256,26 @@ func handleInv(request []byte, bc *Blockchain) {
 	}
 }
 
-func handleGetBlocks(request []byte, bc *Blockchain) {
+func handleGetBlocks(request []byte, bchain *Blockchain) {
 	var buff bytes.Buffer
-	var payload getblocks
+	var payload GetblocksPayload
 
-	buff.Write(request[commandLength:])
+	buff.Write(request[config.CommandLength:])
 	dec := gob.NewDecoder(&buff)
 	err := dec.Decode(&payload)
 	if err != nil {
 		log.Panic(err)
 	}
 
-	blocks := bc.GetBlockHashes()
+	blocks := bchain.GetBlockHashes()
 	sendInv(payload.AddrFrom, "block", blocks)
 }
 
-func handleGetData(request []byte, bc *Blockchain) {
+func handleGetData(request []byte, bchain *Blockchain) {
 	var buff bytes.Buffer
-	var payload getdata
+	var payload GetdataPayload
 
-	buff.Write(request[commandLength:])
+	buff.Write(request[config.CommandLength:])
 	dec := gob.NewDecoder(&buff)
 	err := dec.Decode(&payload)
 	if err != nil {
@@ -282,7 +283,7 @@ func handleGetData(request []byte, bc *Blockchain) {
 	}
 
 	if payload.Type == "block" {
-		block, err := bc.GetBlock([]byte(payload.ID))
+		block, err := bchain.GetBlock([]byte(payload.ID))
 		if err != nil {
 			return
 		}
@@ -294,16 +295,16 @@ func handleGetData(request []byte, bc *Blockchain) {
 		txID := hex.EncodeToString(payload.ID)
 		tx := mempool[txID]
 
-		sendTx(payload.AddrFrom, &tx)
+		SendTx(payload.AddrFrom, &tx)
 		// delete(mempool, txID)
 	}
 }
 
-func handleTx(request []byte, bc *Blockchain) {
+func handleTx(request []byte, bchain *Blockchain) {
 	var buff bytes.Buffer
-	var payload tx
+	var payload TxPayload
 
-	buff.Write(request[commandLength:])
+	buff.Write(request[config.CommandLength:])
 	dec := gob.NewDecoder(&buff)
 	err := dec.Decode(&payload)
 	if err != nil {
@@ -314,81 +315,81 @@ func handleTx(request []byte, bc *Blockchain) {
 	tx := DeserializeTransaction(txData)
 	mempool[hex.EncodeToString(tx.ID)] = tx
 
-	if nodeAddress == knownNodes[0] {
+	if config.NodeAddress == knownNodes[0] {
 		for _, node := range knownNodes {
-			if node != nodeAddress && node != payload.AddFrom {
+			if node != config.NodeAddress && node != payload.AddFrom {
 				sendInv(node, "tx", [][]byte{tx.ID})
 			}
 		}
 	}
-	if nodeAddress == proposer(bc.GetBestHeight(), 0) {
+	if config.NodeAddress == proposer(bchain.GetBestHeight(), 0) {
 		//if len(mempool) >= 1 && len(miningAddress) > 1 {
-		MineTransactions:
-			var txs []*Transaction
+	MineTransactions:
+		var txs []*Transaction
 
-			for id := range mempool {
-				tx := mempool[id]
-				if bc.VerifyTransaction(&tx) {
-					txs = append(txs, &tx)
-				}else{
-					fmt.Println("bad transaction")
-					fmt.Printf("%s\n", tx)
-				}
+		for id := range mempool {
+			tx := mempool[id]
+			if bchain.VerifyTransaction(&tx) {
+				txs = append(txs, &tx)
+			} else {
+				fmt.Println("bad transaction")
+				fmt.Printf("%s\n", tx)
 			}
+		}
 
-			if len(txs) == 0 {
-				fmt.Println("All transactions are invalid! Waiting for new ones...")
-				return
-			}
+		if len(txs) == 0 {
+			fmt.Println("All transactions are invalid! Waiting for new ones...")
+			return
+		}
 
-			cbTx := NewCoinbaseTX(miningAddress, "", 0, nil, 0, 0)
-			txs = append(txs, cbTx)
+		cbTx := NewCoinbaseTX(config.MiningAddress, "", 0, nil, 0, 0)
+		txs = append(txs, cbTx)
 
-			newBlock := bc.MineBlock(txs)
-			URPOSet := URPOSet{bc}
-			URPOSet.Reindex()
+		newBlock := bchain.MineBlock(txs)
+		URPOSet := URPOSet{bchain}
+		URPOSet.Reindex()
 
-			fmt.Println("New block is mined!")
+		fmt.Println("New block is mined!")
 
-			for _, tx := range txs {
-				txID := hex.EncodeToString(tx.ID)
-				delete(mempool, txID)
-			}
+		for _, tx := range txs {
+			txID := hex.EncodeToString(tx.ID)
+			delete(mempool, txID)
+		}
 
-			//for _, node := range knownNodes {
-			//	if node != nodeAddress {
-			//		sendInv(node, "block", [][]byte{newBlock.Hash})
-			//	}
-			//}
-			tmpBlock = *newBlock
+		//for _, node := range knownNodes {
+		//	if node != nodeAddress {
+		//		sendInv(node, "block", [][]byte{newBlock.Hash})
+		//	}
+		//}
+		SetBlock(newBlock)
 
-			if len(mempool) > 0 {
-				goto MineTransactions
-			}
+		if len(mempool) > 0 {
+			goto MineTransactions
+		}
 		//}
 	}
-	curHeight = bc.GetBestHeight()
-	startRound(0)
+	SetHeight(bchain.GetBestHeight())
+	StartRound(0)
 }
 
-func handleVersion(request []byte, bc *Blockchain) {
+func handleVersion(request []byte, bchain *Blockchain) {
 	var buff bytes.Buffer
-	var payload verzion
+	var payload VersionPayload
 
-	buff.Write(request[commandLength:])
+	buff.Write(request[config.CommandLength:])
 	dec := gob.NewDecoder(&buff)
 	err := dec.Decode(&payload)
 	if err != nil {
 		log.Panic(err)
 	}
 
-	myBestHeight := bc.GetBestHeight()
+	myBestHeight := bchain.GetBestHeight()
 	foreignerBestHeight := payload.BestHeight
 
 	if myBestHeight < foreignerBestHeight {
 		sendGetBlocks(payload.AddrFrom)
 	} else if myBestHeight > foreignerBestHeight {
-		sendVersion(payload.AddrFrom, bc)
+		sendVersion(payload.AddrFrom, bchain)
 	}
 
 	// sendAddr(payload.AddrFrom)
@@ -397,12 +398,12 @@ func handleVersion(request []byte, bc *Blockchain) {
 	}
 }
 
-func handleConnection(conn net.Conn, bc *Blockchain) {
+func handleConnection(conn net.Conn, bchain *Blockchain) {
 	request, err := ioutil.ReadAll(conn)
 	if err != nil {
 		log.Panic(err)
 	}
-	command := bytesToCommand(request[:commandLength])
+	command := bytesToCommand(request[:config.CommandLength])
 	fmt.Println(time.Now())
 	fmt.Printf("Received %s command\n", command)
 
@@ -410,27 +411,27 @@ func handleConnection(conn net.Conn, bc *Blockchain) {
 	case "addr":
 		handleAddr(request)
 	case "block":
-		handleBlock(request, bc)
+		handleBlock(request, bchain)
 	case "inv":
-		handleInv(request, bc)
+		handleInv(request, bchain)
 	case "getblocks":
-		handleGetBlocks(request, bc)
+		handleGetBlocks(request, bchain)
 	case "getdata":
-		handleGetData(request, bc)
+		handleGetData(request, bchain)
 	case "tx":
-		handleTx(request, bc)
+		handleTx(request, bchain)
 	case "version":
-		handleVersion(request, bc)
+		handleVersion(request, bchain)
 	case "proposal":
-		handleProposal(request, bc)
+		handleProposal(request, bchain)
 	case "propoBlo":
-		handlePropoBlock(request, bc)
+		handlePropoBlock(request, bchain)
 	case "getPropo":
-		handleGetProposal(request, bc)
+		handleGetProposal(request, bchain)
 	case "prevote":
-		handlePrevote(request, bc)
+		handlePrevote(request, bchain)
 	case "precommit":
-		handlePrecommit(request, bc)
+		handlePrecommit(request, bchain)
 	default:
 		fmt.Println("Unknown command!")
 	}
@@ -440,10 +441,10 @@ func handleConnection(conn net.Conn, bc *Blockchain) {
 
 // StartServer starts a node
 func StartServer(nodeID, minerAddress string) {
-	nodeAddress = fmt.Sprintf("localhost:%s", nodeID)
-	miningAddress = minerAddress
+	config.NodeAddress = fmt.Sprintf("localhost:%s", nodeID)
+	config.MiningAddress = minerAddress
 	initTendermint()
-	ln, err := net.Listen(protocol, nodeAddress)
+	ln, err := net.Listen(config.Protocol, config.NodeAddress)
 	if err != nil {
 		log.Panic(err)
 	}
@@ -453,7 +454,7 @@ func StartServer(nodeID, minerAddress string) {
 
 	curHeight = bc.GetBestHeight()
 
-	if nodeAddress != knownNodes[0] {
+	if config.NodeAddress != knownNodes[0] {
 		sendVersion(knownNodes[0], bc)
 	}
 
@@ -466,7 +467,7 @@ func StartServer(nodeID, minerAddress string) {
 	}
 }
 
-func gobEncode(data interface{}) []byte {
+func GobEncode(data interface{}) []byte {
 	var buff bytes.Buffer
 
 	enc := gob.NewEncoder(&buff)

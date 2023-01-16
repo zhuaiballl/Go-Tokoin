@@ -1,4 +1,4 @@
-package main
+package utils
 
 import (
 	"crypto/rand"
@@ -114,7 +114,6 @@ func StrictSpans(total, spanSize int) []Span {
 	}
 	return spans
 }
-
 
 func HashToPrime(data []byte) *big.Int {
 	// Unclear if this is a good hash function.

@@ -1,9 +1,10 @@
-package main
+package blockchain
 
 import (
 	"bytes"
 	"encoding/gob"
 	"fmt"
+	"github.com/zhuaiballl/Go-Tokoin/utils"
 	"log"
 )
 
@@ -19,7 +20,7 @@ type TXOutput struct {
 
 // Lock signs the output
 func (out *TXOutput) Lock(address []byte) {
-	pubKeyHash := Base58Decode(address)
+	pubKeyHash := utils.Base58Decode(address)
 	pubKeyHash = pubKeyHash[1 : len(pubKeyHash)-4]
 	out.PubKeyHash = pubKeyHash
 }
@@ -31,7 +32,7 @@ func (out *TXOutput) IsLockedWithKey(pubKeyHash []byte) bool {
 
 // Hold signs the output with holder's key
 func (out *TXOutput) Hold(address []byte) {
-	holderKey := Base58Decode(address)
+	holderKey := utils.Base58Decode(address)
 	holderKey = holderKey[1 : len(holderKey)-4]
 	out.HolderKey = holderKey
 }
@@ -43,17 +44,17 @@ func (out *TXOutput) IsHeldWithKey(holderKey []byte) bool {
 
 // NewTXOutput create a new TXOutput
 func NewTXOutput(time int, id []byte, gps int, temper int, address string) *TXOutput {
-	txo := &TXOutput{time, id, gps, temper,nil, nil}
+	txo := &TXOutput{time, id, gps, temper, nil, nil}
 	txo.Lock([]byte(address))
 
 	return txo
 }
 
-func (out *TXOutput)show() {
-	fmt.Printf("{\n");
-	fmt.Printf("Time: %d\n",out.Time)
-	fmt.Printf("GPS: %d\n",out.GPS)
-	fmt.Printf("Temperature: %d\n",out.Temperature)
+func (out *TXOutput) Show() {
+	fmt.Printf("{\n")
+	fmt.Printf("Time: %d\n", out.Time)
+	fmt.Printf("GPS: %d\n", out.GPS)
+	fmt.Printf("Temperature: %d\n", out.Temperature)
 	fmt.Printf("}\n")
 }
 
@@ -93,5 +94,5 @@ func (out *TXOutput) CheckCondition(time *int, ID *[]byte, GPS *int, temper *int
 	//if !(out.checkID(ID)){return false}
 	//if !(out.checkGPS(GPS)){return false}
 	//if !(out.checkTemper(temper)){return false}
-	return *time==out.Time && bytes.Compare(*ID, out.ID)==0 && *GPS==out.GPS && *temper==out.Temperature
+	return *time == out.Time && bytes.Compare(*ID, out.ID) == 0 && *GPS == out.GPS && *temper == out.Temperature
 }

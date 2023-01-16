@@ -1,4 +1,4 @@
-package main
+package blockchain
 
 import (
 	"bytes"
@@ -22,6 +22,10 @@ type Blockchain struct {
 	db  *bolt.DB
 }
 
+func (bchain *Blockchain) CloseDB() {
+	bchain.db.Close()
+}
+
 // CreateBlockchain creates a new blockchain DB
 func CreateBlockchain(address, nodeID string) *Blockchain {
 	dbFile := fmt.Sprintf(dbFile, nodeID)
@@ -32,7 +36,7 @@ func CreateBlockchain(address, nodeID string) *Blockchain {
 
 	var tip []byte
 
-	cbtx := NewCoinbaseTX(address, genesisCoinbaseData, 0, nil, 0,37)
+	cbtx := NewCoinbaseTX(address, genesisCoinbaseData, 0, nil, 0, 37)
 	genesis := NewGenesisBlock(cbtx)
 
 	db, err := bolt.Open(dbFile, 0600, nil)
@@ -270,7 +274,9 @@ func (bc *Blockchain) VerifyBlock(block *Block) bool {
 	if bytes.Compare(bc.tip, block.PrevBlockHash) != 0 {
 		fmt.Printf("%x !!! %x ~~~ %x\n", bc.tip, block.PrevBlockHash, block.Hash)
 		return false
-	}else{return true}
+	} else {
+		return true
+	}
 	//return bytes.Compare(bc.tip, block.PrevBlockHash) == 0
 }
 

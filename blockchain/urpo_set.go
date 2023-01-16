@@ -1,4 +1,4 @@
-package main
+package blockchain
 
 import (
 	"encoding/hex"
@@ -44,16 +44,16 @@ func (u URPOSet) FindSpendableOutputs(pubkeyHash []byte) map[string][]int {
 	return unspentOutputs
 }
 
-func (u URPOSet) FindOutput(txId []byte) TXOutput{
-	tx, err := u.Blockchain.FindTransaction(txId);
+func (u URPOSet) FindOutput(txId []byte) TXOutput {
+	tx, err := u.Blockchain.FindTransaction(txId)
 	if err != nil {
 		log.Panic(err)
 	}
 	if len(tx.Vout) == 0 {
 		fmt.Println("No output was found in this transaction!")
-		return TXOutput{0,nil,0,0,nil,nil}
+		return TXOutput{0, nil, 0, 0, nil, nil}
 	}
-	return tx.Vout[0];
+	return tx.Vout[0]
 }
 
 // FindUTXO finds UTXO for a public key hash
@@ -85,7 +85,7 @@ func (u URPOSet) FindURPO(pubKeyHash []byte) []TXOutput {
 }
 
 //
-func (u URPOSet) FindURPOIndexs(pubKeyHash []byte) []string{
+func (u URPOSet) FindURPOIndexs(pubKeyHash []byte) []string {
 	var txIDs []string
 	db := u.Blockchain.db
 

@@ -1,10 +1,11 @@
-package main
+package blockchain
 
 import (
 	"bytes"
 	"encoding/gob"
 	"encoding/hex"
 	"fmt"
+	"github.com/zhuaiballl/Go-Tokoin/config"
 	"log"
 	"strings"
 	"time"
@@ -13,7 +14,7 @@ import (
 const total_voting_power = 4
 
 var faultNumber int
-var curHeight,curRound int
+var curHeight, curRound int
 var step string
 var lockedValue []byte
 var lockedRound int
@@ -31,28 +32,28 @@ var inSchedulePrecommit bool
 
 type getProposal struct {
 	AddrFrom string
-	Hash []byte
+	Hash     []byte
 }
 
 type proposal struct {
-	AddrFrom string
-	Height int
-	Round int
-	BlockHash []byte
+	AddrFrom   string
+	Height     int
+	Round      int
+	BlockHash  []byte
 	ValidRound int
 }
 
 type prevote struct {
-	AddrFrom string
-	Height int
-	ValidRound int
+	AddrFrom    string
+	Height      int
+	ValidRound  int
 	HashedValue []byte
 }
 
 type precommit struct {
-	AddrFrom string
-	Height int
-	Round int
+	AddrFrom    string
+	Height      int
+	Round       int
 	HashedValue []byte
 }
 
@@ -105,11 +106,19 @@ func (preco *precommit) height_round() string {
 
 func proposer(height, round int) string {
 	//return knownNodes[(height + round) % len(knownNodes)]
-	return fmt.Sprintf("localhost:300%d",(height+round)%4)
+	return fmt.Sprintf("localhost:300%d", (height+round)%4)
 }
 
-func getBlock() Block{
+func getBlock() Block {
 	return tmpBlock
+}
+
+func SetBlock(block *Block) {
+	tmpBlock = *block
+}
+
+func SetHeight(height int) {
+	curHeight = height
 }
 
 func getBlockById(id []byte) Block {
@@ -130,23 +139,23 @@ func initTendermint() {
 }
 
 func broadcastPropoBlock(b *Block) {
-	data := block{nodeAddress, b.Serialize()}
-	payload := gobEncode(data)
-	request := append(commandToBytes("propoBlo"), payload...)
+	data := BlockPayload{config.NodeAddress, b.Serialize()}
+	payload := GobEncode(data)
+	request := append(CommandToBytes("propoBlo"), payload...)
 
 	fmt.Println("broadcasting proposal block")
 
 	for i := 0; i < 4; i++ {
-		node := fmt.Sprintf("localhost:300%d",i)
-		sendData(node, request)
+		node := fmt.Sprintf("localhost:300%d", i)
+		SendData(node, request)
 	}
 }
 
 func handlePropoBlock(request []byte, bc *Blockchain) {
 	var buff bytes.Buffer
-	var payload block
+	var payload BlockPayload
 
-	buff.Write(request[commandLength:])
+	buff.Write(request[config.CommandLength:])
 	dec := gob.NewDecoder(&buff)
 	err := dec.Decode(&payload)
 	if err != nil {
@@ -166,19 +175,19 @@ func handlePropoBlock(request []byte, bc *Blockchain) {
 }
 
 func sendGetProposal(addr string, hash []byte) {
-	data := getProposal{nodeAddress, hash}
-	payload := gobEncode(data)
-	request := append(commandToBytes("getPropo"), payload...)
+	data := getProposal{config.NodeAddress, hash}
+	payload := GobEncode(data)
+	request := append(CommandToBytes("getPropo"), payload...)
 
 	fmt.Printf("sending getProposal %x to %s\n", hash, addr)
-	sendData(addr, request)
+	SendData(addr, request)
 }
 
 func handleGetProposal(request []byte, bc *Blockchain) {
 	var buff bytes.Buffer
 	var payload getProposal
 
-	buff.Write(request[commandLength:])
+	buff.Write(request[config.CommandLength:])
 	dec := gob.NewDecoder(&buff)
 	err := dec.Decode(&payload)
 	if err != nil {
@@ -191,19 +200,19 @@ func handleGetProposal(request []byte, bc *Blockchain) {
 }
 
 func sendProposal(addr string, hash []byte) {
-	proposal := proposal{nodeAddress, curHeight, curRound, hash, validRound}
-	payload := gobEncode(proposal)
-	request := append(commandToBytes("proposal"), payload...)
+	proposal := proposal{config.NodeAddress, curHeight, curRound, hash, validRound}
+	payload := GobEncode(proposal)
+	request := append(CommandToBytes("proposal"), payload...)
 
 	fmt.Printf("sending proposal message %x to %s\n", proposal.BlockHash, addr)
-	sendData(addr, request)
+	SendData(addr, request)
 }
 
 func handleProposal(request []byte, bc *Blockchain) {
 	var buff bytes.Buffer
 	var payload proposal
 
-	buff.Write(request[commandLength:])
+	buff.Write(request[config.CommandLength:])
 	dec := gob.NewDecoder(&buff)
 	err := dec.Decode(&payload)
 	if err != nil {
@@ -227,12 +236,12 @@ func handleProposal(request []byte, bc *Blockchain) {
 	proposalPool[payload.height_round_value()] = 1
 	add_height_and_round(payload.Height, payload.Round)
 	// triggering rule 1
-	if payload.Height == curHeight && payload.Round == curRound && payload.ValidRound == -1 && step == "propose"{
+	if payload.Height == curHeight && payload.Round == curRound && payload.ValidRound == -1 && step == "propose" {
 		voteBlock := getBlockById(payload.BlockHash)
-		if bc.VerifyBlock(&voteBlock) && (lockedRound == -1 || bytes.Compare(lockedValue, payload.BlockHash) ==0) {
+		if bc.VerifyBlock(&voteBlock) && (lockedRound == -1 || bytes.Compare(lockedValue, payload.BlockHash) == 0) {
 			fmt.Println("good propo")
 			broadcastPrevote(curHeight, curRound, payload.BlockHash)
-		}else{
+		} else {
 			fmt.Println("bad propo")
 			broadcastPrevote(curHeight, curRound, nil)
 		}
@@ -242,15 +251,15 @@ func handleProposal(request []byte, bc *Blockchain) {
 }
 
 func broadcastPrevote(height, round int, hashedValue []byte) {
-	prevote := prevote{nodeAddress, height, round, hashedValue}
-	payload := gobEncode(prevote)
-	request := append(commandToBytes("prevote"), payload...)
+	prevote := prevote{config.NodeAddress, height, round, hashedValue}
+	payload := GobEncode(prevote)
+	request := append(CommandToBytes("prevote"), payload...)
 
 	fmt.Println("broadcasting prevote message")
 
 	for i := 0; i < 4; i++ {
-		node := fmt.Sprintf("localhost:300%d",i)
-		sendData(node, request)
+		node := fmt.Sprintf("localhost:300%d", i)
+		SendData(node, request)
 	}
 }
 
@@ -258,7 +267,7 @@ func handlePrevote(request []byte, bc *Blockchain) {
 	var buff bytes.Buffer
 	var payload prevote
 
-	buff.Write(request[commandLength:])
+	buff.Write(request[config.CommandLength:])
 	dec := gob.NewDecoder(&buff)
 	err := dec.Decode(&payload)
 	if err != nil {
@@ -271,14 +280,16 @@ func handlePrevote(request []byte, bc *Blockchain) {
 	}
 	// logging
 	status := "negative"
-	if payload.HashedValue != nil {status = "positive"}
+	if payload.HashedValue != nil {
+		status = "positive"
+	}
 	fmt.Printf("received %s prevote message from %s\n", status, payload.AddrFrom)
 
 	payloadString := payload.String()
 	// counting
 	if cnt, fd := prevotePool[payloadString]; fd {
 		prevotePool[payloadString] = cnt + 1
-	}else{
+	} else {
 		prevotePool[payloadString] = 1
 	}
 	add_height_and_round(payload.Height, payload.ValidRound)
@@ -292,7 +303,7 @@ func handlePrevote(request []byte, bc *Blockchain) {
 			fmt.Printf("finding %s in proposal pool\n", targetProposal.String())
 			if fd {
 				fmt.Println("proposal found")
-			}else {
+			} else {
 				fmt.Println("proposal not found")
 			}
 
@@ -310,7 +321,7 @@ func handlePrevote(request []byte, bc *Blockchain) {
 
 			if payload.ValidRound == curRound && payload.Height == curHeight {
 				_, fd = proposalPool[targetProposal.height_round_value()]
-				if fd && bc.VerifyBlock(&voteBlock) && (step == "prevote" || step == "precommit") {// TODO: this rule should be triggered only at the first time its condition is met.
+				if fd && bc.VerifyBlock(&voteBlock) && (step == "prevote" || step == "precommit") { // TODO: this rule should be triggered only at the first time its condition is met.
 					if step == "prevote" {
 						lockedValue = voteBlock.Hash
 						lockedRound = curRound
@@ -322,7 +333,7 @@ func handlePrevote(request []byte, bc *Blockchain) {
 					validRound = curRound
 				}
 			}
-		}else{
+		} else {
 			if step == "prevote" {
 				broadcastPrecommit(curHeight, curRound, nil)
 				step = "precommit"
@@ -332,9 +343,9 @@ func handlePrevote(request []byte, bc *Blockchain) {
 	}
 
 	height_round := payload.height_round()
-	if cnt,fd := prevotePool[height_round]; fd {
+	if cnt, fd := prevotePool[height_round]; fd {
 		prevotePool[height_round] = cnt + 1
-	}else{
+	} else {
 		prevotePool[height_round] = 1
 	}
 	if prevotePool[height_round] >= 2*faultNumber+1 && step == "prevote" && payload.Height == curHeight {
@@ -343,15 +354,15 @@ func handlePrevote(request []byte, bc *Blockchain) {
 }
 
 func broadcastPrecommit(height, round int, hashedValue []byte) {
-	precommit := precommit{nodeAddress, height, round, hashedValue}
-	payload := gobEncode(precommit)
-	request := append(commandToBytes("precommit"), payload...)
+	precommit := precommit{config.NodeAddress, height, round, hashedValue}
+	payload := GobEncode(precommit)
+	request := append(CommandToBytes("precommit"), payload...)
 
 	fmt.Println("broadcasting precommit message")
 
 	for i := 0; i < 4; i++ {
-		node := fmt.Sprintf("localhost:300%d",i)
-		sendData(node, request)
+		node := fmt.Sprintf("localhost:300%d", i)
+		SendData(node, request)
 	}
 }
 
@@ -359,7 +370,7 @@ func handlePrecommit(request []byte, bc *Blockchain) {
 	var buff bytes.Buffer
 	var payload prevote
 
-	buff.Write(request[commandLength:])
+	buff.Write(request[config.CommandLength:])
 	dec := gob.NewDecoder(&buff)
 	err := dec.Decode(&payload)
 	if err != nil {
@@ -373,7 +384,9 @@ func handlePrecommit(request []byte, bc *Blockchain) {
 	// logging
 	status := "negative"
 
-	if payload.HashedValue != nil {status = "positive"}
+	if payload.HashedValue != nil {
+		status = "positive"
+	}
 	fmt.Printf("received %s precommit message from %s\n", status, payload.AddrFrom)
 
 	if payload.HashedValue != nil {
@@ -381,12 +394,12 @@ func handlePrecommit(request []byte, bc *Blockchain) {
 		payloadString := payload.String()
 		if cnt, fd := precommitPool[payloadString]; fd {
 			precommitPool[payloadString] = cnt + 1
-		}else{
+		} else {
 			precommitPool[payloadString] = 1
 		}
 
 		targetProposal := proposal{"", curHeight, payload.ValidRound, payload.HashedValue, -1}
-		_,fd := proposalPool[targetProposal.height_round_value()]
+		_, fd := proposalPool[targetProposal.height_round_value()]
 		if fd && precommitPool[payloadString] >= 2*faultNumber+1 && bc.GetBestHeight() <= curHeight && payload.Height == curHeight {
 			curHeight++
 			voteBlock := getBlockById(payload.HashedValue)
@@ -398,14 +411,14 @@ func handlePrecommit(request []byte, bc *Blockchain) {
 				URPOSet.Reindex()
 				for _, tx := range voteBlock.Transactions {
 					txID := hex.EncodeToString(tx.ID)
-					delete(mempool, txID)
+					DeleteMempoolTx(txID)
 				}
 				lockedRound = -1
 				lockedValue = nil
 				validRound = -1
 				validValue = nil
-				curRound = 0//startRound(0)
-			}else{
+				curRound = 0 //startRound(0)
+			} else {
 				curHeight--
 			}
 		}
@@ -414,32 +427,34 @@ func handlePrecommit(request []byte, bc *Blockchain) {
 	add_height_and_round(payload.Height, payload.ValidRound)
 
 	height_round := payload.height_round()
-	if cnt,fd := precommitPool[height_round]; fd {
+	if cnt, fd := precommitPool[height_round]; fd {
 		precommitPool[height_round] = cnt + 1
-	}else{
+	} else {
 		precommitPool[height_round] = 1
 	}
-	if precommitPool[height_round] >= 2*faultNumber+1 && payload.Height == curHeight{
+	if precommitPool[height_round] >= 2*faultNumber+1 && payload.Height == curHeight {
 		scheduleTimeoutPrecommit()
 	}
 }
 
-func startRound(round int) {
-	if round >= total_voting_power {return }
+func StartRound(round int) {
+	if round >= total_voting_power {
+		return
+	}
 	fmt.Printf("start round %d...\n", round)
 	curRound = round
 	step = "propose"
 	logStep()
-	if strings.Compare(proposer(curHeight, curRound), nodeAddress) == 0 {
+	if strings.Compare(proposer(curHeight, curRound), config.NodeAddress) == 0 {
 		var block Block
 		if validValue != nil {
 			block = getBlockById(validValue)
-		}else{
+		} else {
 			block = getBlock()
 		}
 		broadcastPropoBlock(&block)
 		//broadcastProposal(curHeight, curRound, &block, validRound)
-	}else{
+	} else {
 		scheduleTimeoutPropose()
 	}
 }
@@ -447,7 +462,7 @@ func startRound(round int) {
 func scheduleTimeoutPropose() {
 	if !inSchedulePropose {
 		inSchedulePropose = true
-		timer := time.NewTimer(time.Second*5)//timeoutPropose(curRound)
+		timer := time.NewTimer(time.Second * 5) //timeoutPropose(curRound)
 		go func() {
 			<-timer.C
 			onTimeoutPropose(curHeight, curRound)
@@ -466,7 +481,7 @@ func onTimeoutPropose(height, round int) {
 func scheduleTimeoutPrevote() {
 	if !inSchedulePrevote {
 		inSchedulePrevote = true
-		timer := time.NewTimer(time.Second*5)//timeoutPrevote(curRound)
+		timer := time.NewTimer(time.Second * 5) //timeoutPrevote(curRound)
 		go func() {
 			<-timer.C
 			onTimeoutPrevote(curHeight, curRound)
@@ -485,7 +500,7 @@ func onTimeoutPrevote(height, round int) {
 func scheduleTimeoutPrecommit() {
 	if !inSchedulePrecommit {
 		inSchedulePrecommit = true
-		timer := time.NewTimer(time.Second*5)//timeoutPrecommit(curRound)
+		timer := time.NewTimer(time.Second * 5) //timeoutPrecommit(curRound)
 		go func() {
 			<-timer.C
 			onTimeoutPrecommit(curHeight, curRound)
@@ -495,23 +510,23 @@ func scheduleTimeoutPrecommit() {
 
 func onTimeoutPrecommit(height, round int) {
 	if height == curHeight && round == curRound {
-		startRound(curRound + 1)
+		StartRound(curRound + 1)
 	}
 	inSchedulePrecommit = false
 }
 
 func add_height_and_round(height, round int) {
 	heightnround := fmt.Sprintf("height:%d,round:%d", height, round)
-	if cnt,fd := messagePool[heightnround]; fd {
+	if cnt, fd := messagePool[heightnround]; fd {
 		messagePool[heightnround] = cnt + 1
-	}else{
+	} else {
 		messagePool[heightnround] = 1
 	}
 	if round > curRound && messagePool[heightnround] >= faultNumber+1 {
-		startRound(round)
+		StartRound(round)
 	}
 }
 
 func logStep() {
-	fmt.Printf("step changed to %s\n",step)
+	fmt.Printf("step changed to %s\n", step)
 }

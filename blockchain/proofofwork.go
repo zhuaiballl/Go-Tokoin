@@ -1,9 +1,10 @@
-package main
+package blockchain
 
 import (
 	"bytes"
 	"crypto/sha256"
 	"fmt"
+	"github.com/zhuaiballl/Go-Tokoin/utils"
 	"math"
 	"math/big"
 )
@@ -35,9 +36,9 @@ func (pow *ProofOfWork) prepareData(nonce int) []byte {
 		[][]byte{
 			pow.block.PrevBlockHash,
 			pow.block.HashTransactions(),
-			IntToHex(pow.block.Timestamp),
-			IntToHex(int64(targetBits)),
-			IntToHex(int64(nonce)),
+			utils.IntToHex(pow.block.Timestamp),
+			utils.IntToHex(int64(targetBits)),
+			utils.IntToHex(int64(nonce)),
 		},
 		[]byte{},
 	)
@@ -62,7 +63,7 @@ func (pow *ProofOfWork) Run() (int, []byte) {
 		hashInt.SetBytes(hash[:])
 
 		//if hashInt.Cmp(pow.target) == -1 {
-			break
+		break
 		//} else {
 		//	nonce++
 		//}

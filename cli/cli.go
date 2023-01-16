@@ -1,4 +1,4 @@
-package main
+package cli
 
 import (
 	"flag"
@@ -46,8 +46,8 @@ func (cli *CLI) Run() {
 		os.Exit(1)
 	}
 
-	createTokoinCmd := flag.NewFlagSet("createtokoin",flag.ExitOnError)
-	editPolicyCmd := flag.NewFlagSet("editpolicy",flag.ExitOnError)
+	createTokoinCmd := flag.NewFlagSet("createtokoin", flag.ExitOnError)
+	editPolicyCmd := flag.NewFlagSet("editpolicy", flag.ExitOnError)
 	createBlockchainCmd := flag.NewFlagSet("createblockchain", flag.ExitOnError)
 	createWalletCmd := flag.NewFlagSet("createwallet", flag.ExitOnError)
 	listAddressesCmd := flag.NewFlagSet("listaddresses", flag.ExitOnError)
@@ -192,7 +192,7 @@ func (cli *CLI) Run() {
 		if nodeID == "" {
 			startNodeCmd.Usage()
 			os.Exit(1)
-	}
+		}
 		cli.startNode(nodeID, *startNodeMiner)
 	}
 
@@ -248,5 +248,5 @@ func (cli *CLI) Run() {
 		cli.test(nodeID, *testFlag, *testOwner, *testHolder, *testTxid, *testTime, *testID, *testGPS, *testTemper)
 	}
 
-	fmt.Println("cli out - ",time.Now())
+	fmt.Println("cli out - ", time.Now())
 }

@@ -1,4 +1,4 @@
-package main
+package blockchain
 
 import (
 	"bytes"
@@ -6,6 +6,8 @@ import (
 	"crypto/elliptic"
 	"crypto/rand"
 	"crypto/sha256"
+	"github.com/zhuaiballl/Go-Tokoin/utils"
+	wlt "github.com/zhuaiballl/Go-Tokoin/wallet"
 	"math/big"
 	"strconv"
 	"strings"
@@ -125,7 +127,7 @@ func (tx *Transaction) TrimmedCopy() Transaction {
 	}
 
 	for _, vout := range tx.Vout {
-		outputs = append(outputs, TXOutput{vout.Time,vout.ID, vout.GPS, vout.Temperature, vout.PubKeyHash, vout.HolderKey})
+		outputs = append(outputs, TXOutput{vout.Time, vout.ID, vout.GPS, vout.Temperature, vout.PubKeyHash, vout.HolderKey})
 	}
 
 	txCopy := Transaction{tx.ID, inputs, outputs}
@@ -198,11 +200,11 @@ func NewCoinbaseTX(addr, data string, time int, id []byte, gps int, temper int) 
 }
 
 // NewURPOTransaction creates a new transaction
-func NewURPOTransaction(wallet *Wallet, to string, URPOSet *URPOSet) *Transaction {
+func NewURPOTransaction(wallet *wlt.Wallet, to string, URPOSet *URPOSet) *Transaction {
 	var inputs []TXInput
 	var outputs []TXOutput
 
-	pubKeyHash := HashPubKey(wallet.PublicKey)
+	pubKeyHash := wlt.HashPubKey(wallet.PublicKey)
 	validOutputs := URPOSet.FindSpendableOutputs(pubKeyHash)
 
 	// Build a list of inputs
@@ -229,11 +231,11 @@ func NewURPOTransaction(wallet *Wallet, to string, URPOSet *URPOSet) *Transactio
 }
 
 // Deposit sets a holder for a tokoin
-func Deposit(wallet *Wallet, holder string, URPOSet *URPOSet,txId string) *Transaction{
+func Deposit(wallet *wlt.Wallet, holder string, URPOSet *URPOSet, txId string) *Transaction {
 	var inputs []TXInput
 	var outputs []TXOutput
 
-	pubKeyHash := HashPubKey(wallet.PublicKey)
+	pubKeyHash := wlt.HashPubKey(wallet.PublicKey)
 	txID, err := hex.DecodeString(txId)
 	if err != nil {
 		log.Panic(err)
@@ -258,11 +260,11 @@ func Deposit(wallet *Wallet, holder string, URPOSet *URPOSet,txId string) *Trans
 }
 
 // get a tokoin, edit it, and put the new one back in the blockchain
-func EditPolicy(wallet Wallet, URPOSet *URPOSet, txId []byte, time, id, gps, temper string) *Transaction {
+func EditPolicy(wallet wlt.Wallet, URPOSet *URPOSet, txId []byte, time, id, gps, temper string) *Transaction {
 	var inputs []TXInput
 	var outputs []TXOutput
 
-	pubKeyHash := HashPubKey(wallet.PublicKey)
+	pubKeyHash := wlt.HashPubKey(wallet.PublicKey)
 	output := URPOSet.FindOutput(txId)
 	if !(output.IsLockedWithKey(pubKeyHash)) {
 		log.Panic("ERROR: Not locked with this key")
@@ -296,10 +298,10 @@ func EditPolicy(wallet Wallet, URPOSet *URPOSet, txId []byte, time, id, gps, tem
 	return &tx
 }
 
-func RevocatTokoin(wallet Wallet, URPOSet *URPOSet, txId []byte) *Transaction {
+func RevocatTokoin(wallet wlt.Wallet, URPOSet *URPOSet, txId []byte) *Transaction {
 	var inputs []TXInput
 
-	pubKeyHash := HashPubKey(wallet.PublicKey)
+	pubKeyHash := wlt.HashPubKey(wallet.PublicKey)
 	output := URPOSet.FindOutput(txId)
 	if !(output.IsLockedWithKey(pubKeyHash)) {
 		log.Panic("ERROR: Not locked with this key")
@@ -312,19 +314,19 @@ func RevocatTokoin(wallet Wallet, URPOSet *URPOSet, txId []byte) *Transaction {
 	tx.ID = tx.Hash()
 	URPOSet.Blockchain.SignTransaction(&tx, wallet.PrivateKey)
 
-	return  &tx
+	return &tx
 }
 
-func RedeemTokoin(wallet Wallet, holder string, URPOSet *URPOSet, txId []byte, time *int, id *[]byte, gps, temper *int) *Transaction {
+func RedeemTokoin(wallet wlt.Wallet, holder string, URPOSet *URPOSet, txId []byte, time *int, id *[]byte, gps, temper *int) *Transaction {
 	var inputs []TXInput
 	var outputs []TXOutput
 
-	ownerKey := HashPubKey(wallet.PublicKey)
+	ownerKey := wlt.HashPubKey(wallet.PublicKey)
 	output := URPOSet.FindOutput(txId)
 	if !(output.IsLockedWithKey(ownerKey)) {
 		log.Panic("ERROR: Wrong owner")
 	}
-	holderKey := Base58Decode([]byte(holder))
+	holderKey := utils.Base58Decode([]byte(holder))
 	holderKey = holderKey[1 : len(holderKey)-4]
 	if !(output.IsHeldWithKey(holderKey)) {
 		log.Panic("ERROR: Wrong holder")

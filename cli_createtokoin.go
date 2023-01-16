@@ -10,7 +10,7 @@ func (cli *CLI) createTokoin(address, nodeID string) {
 		log.Panic("ERROR: Address is not valid")
 	}
 	bc := NewBlockchain(nodeID)
-	URPOSet := URPOSet{bc}
+	//URPOSet := URPOSet{bc}
 	defer bc.db.Close()
 
 	//tx := NewURPOTransaction(&wallet, to, &URPOSet)
